@@ -86,7 +86,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     int prev_yr, prev_mo, prev_dy, prev_hr, prev_mt, prev_sc;
     double *datevec;
 
-    double *lla_out;
+    double *lla_out, *err_out;
     double *mlt_out;
 
     double *geo2mag;
@@ -113,8 +113,8 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     /*  check for proper number of arguments */
     if (nrhs != 5)
         mexErrMsgIdAndTxt("AACGM_v2:InputError:invalidNumInputs", "Five inputs required.");
-    if (nlhs > 2)
-        mexErrMsgIdAndTxt("AACGM_v2:InputError:invalidNumOutputs", "One or two outputs required.");
+    if (nlhs > 3)
+        mexErrMsgIdAndTxt("AACGM_v2:InputError:invalidNumOutputs", "Up to three output requred.");
 
     if ( mxIsChar(prhs[0]) != 1) 
       mexErrMsgIdAndTxt( "AACGM_v2:InputError:inputNotString",
@@ -213,6 +213,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
 #endif
     }
 
+    if (nlhs > 2){
+        plhs[2] = mxCreateDoubleMatrix((mwSize)2, (mwSize)ncols, mxREAL);
+#if MX_HAS_INTERLEAVED_COMPLEX
+        err_out = mxGetDoubles(plhs[2]);
+#else
+        err_out = mxGetPr(plhs[2]);
+#endif
+    }
+
     /* initialize prev times*/
     prev_yr = -1;
     prev_mo = -1;
@@ -238,10 +247,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             prev_mt = mt;
             prev_sc = sc; 
             err = AACGM_v2_SetDateTime(yr, mo, dy, hr, mt, sc);
+            *(err_out + i*2) = err;
 
-            if (err == -99) {
-                mexWarnMsgIdAndTxt("AACGM_v2_SetDateTime:ConfigNotFound",
-                    "config.ini is not found in the current working folder; E-CHAIM must be run from its project folder set in ECHAIMConfig.m");
+            if (err != ) {
+                mexWarnMsgIdAndTxt("AACGM_v2_SetDateTime:Error",
+                    "There was an error in AACGM_v2_SetDateTime, see the return codes matrix.");
             }
 
             if (nlhs > 1){
@@ -259,6 +269,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         }
 
         err = AACGM_v2_Convert(lat, lon, hgt, &mlat, &mlon, &r, code);
+        *(err_out + i*2 + 1) = err;
 
         if ((err < -1) && (N_WARN < N_MAX_WARN)) {
             N_WARN++;

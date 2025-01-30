@@ -9,6 +9,9 @@ function Out = aacgm(lat,lon,time,alt,varargin)
 %
 % OUTPUTS
 %   structure with fields
+%   the "error" field is a 2xN matrix of the return codes from AACGM:
+%   1xN: AACGM_v2_SetDateTime
+%   2xN: AACGM_v2_Convert
 %
 % time, lon, lat, alt, mlt(hours), mlat(deg), mlon(deg), malt (km)
 % OPTIONAL INPUTS
@@ -158,7 +161,7 @@ elseif strcmpi(mode,'map')
     [lat,lon,alt,time] = ndgrid(lat(:),lon(:), alt(:), time(:));
 end
 
-[d, Out.mlt] = mex_aacgm(char(aacgm_dirs(1)), char(aacgm_dirs(2)), ...
+[d, Out.mlt, err] = mex_aacgm(char(aacgm_dirs(1)), char(aacgm_dirs(2)), ...
     double([lat(:),lon(:),alt(:)])', ...
     datevec(time)',double(code));
 
@@ -176,6 +179,8 @@ else
 end
 
 Out.mlt = OutFmt(Out.mlt)';
+
+Out.errors = err;
 
 end
 
