@@ -3,6 +3,20 @@
 #include "aacgmlib_v2.h"
 #include <math.h>
 
+#ifdef _WIN32
+#include <windows.h>
+
+int setenv(const char *name, const char *value, int overwrite) {
+    if (overwrite || GetEnvironmentVariable(name, NULL, 0) == 0) {
+        return SetEnvironmentVariable(name, value) ? 0 : -1;
+    }
+    return 0;
+}
+
+int unsetenv(const char *name) {
+    return SetEnvironmentVariable(name, NULL) ? 0 : -1;
+}
+#endif
 
 #define sind(x) (sin(fmod((x),360) * M_PI / 180))
 #define cosd(x) (cos(fmod((x),360) * M_PI / 180))
@@ -102,7 +116,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     if (nlhs > 2)
         mexErrMsgIdAndTxt("AACGM_v2:InputError:invalidNumOutputs", "One or two outputs required.");
 
-    if ( mxIsChar(prhs[0]) != 1)
+    if ( mxIsChar(prhs[0]) != 1) 
       mexErrMsgIdAndTxt( "AACGM_v2:InputError:inputNotString",
               "AACGM Prefix must be a string.");
 
@@ -110,23 +124,31 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
       mexErrMsgIdAndTxt( "AACGM_v2:InputError:inputNotString",
               "IGRF Coefficient path must be a string.");    
 
-    /* get the length of the AACGM Prefix */
-    buflen = (mxGetM(prhs[0]) * mxGetN(prhs[0])) + 1;
+    //set the environment variables
+    char *env_var1 = mxArrayToString(prhs[0]);  // AACGM prefix
+    char *env_var2 = mxArrayToString(prhs[1]);  // IGRF coefficients
 
-    /* copy the string data from prhs[0] into a C string input_ buf.    */
-    input_buf = mxArrayToString(prhs[0]);
-
-    setenv("AACGM_v2_DAT_PREFIX", input_buf, 1);
-
-    /* get the length of the IGRF Coefficients */
-    buflen = (mxGetM(prhs[1]) * mxGetN(prhs[1])) + 1;
-
-    /* copy the string data from prhs[0] into a C string input_ buf.    */
-    input_buf = mxArrayToString(prhs[1]);
-
-    setenv("IGRF_COEFFS", input_buf, 1);
-
-    mxFree(input_buf);
+    #if defined(_WIN32) || defined(_WIN64)
+    // On Windows, use putenv
+    if (env_var1 != NULL) {
+        char env_string1[1024];
+        snprintf(env_string1, sizeof(env_string1), "AACGM_v2_DAT_PREFIX=%s", env_var1);
+        putenv(env_string1);  // Set the first environment variable
+    }
+    if (env_var2 != NULL) {
+        char env_string2[1024];
+        snprintf(env_string2, sizeof(env_string2), "IGRF_COEFFS=%s", env_var2);
+        putenv(env_string2);  // Set the second environment variable
+    }
+    #else
+        // On Unix-like systems (Linux, macOS), use setenv
+        if (env_var1 != NULL) {
+            setenv("AACGM_v2_DAT_PREFIX", env_var1, 1);  // Set the first environment variable
+        }
+        if (env_var2 != NULL) {
+            setenv("IGRF_COEFFS", env_var2, 1);  // Set the second environment variable
+        }
+    #endif
 
     if( !mxIsDouble(prhs[2]) || 
          mxIsComplex(prhs[2])) {
@@ -215,7 +237,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             prev_hr = hr;
             prev_mt = mt;
             prev_sc = sc; 
-            AACGM_v2_SetDateTime(yr, mo, dy, hr, mt, sc);
+            err = AACGM_v2_SetDateTime(yr, mo, dy, hr, mt, sc);
+
+            if (err == -99) {
+                mexWarnMsgIdAndTxt("AACGM_v2_SetDateTime:ConfigNotFound",
+                    "config.ini is not found in the current working folder; E-CHAIM must be run from its project folder set in ECHAIMConfig.m");
+            }
+
             if (nlhs > 1){
                 mlon_ref = subsolar(yr, mo, dy, hr, mt, sc);
             }
@@ -283,4 +311,3 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     
 
 }
-

@@ -29,35 +29,31 @@ function Out = aacgm(lat,lon,time,alt,varargin)
 %    enables tracing if needed.
 %
 %   Ben Reid 2020, 2023
+%   Modifed for E-CHAIM - Anthony McCaffrey 2023
 
+%Directory which contains the mex file,
+%the "source" directory, and the "coeffs" directory
+RootDir = fileparts(which("aacgm"));
 
-[RootDir, ~, ~] = fileparts(mfilename('fullpath'));
-ModelDir = fullfile(RootDir,'c_aacgm_v2.6');
+%get the relavent directories
+aacgm_dirs = init(fullfile(RootDir,"coeffs"));
+ModelDir = fullfile(RootDir,'source');
 
 ErrorStr = 'MATLAB:AACGM';
 
-aacgm_path = fullfile(RootDir,'aacgm_coeffs-13/aacgm_coeffs-13-');
-igrf_path = fullfile(ModelDir,'magmodel_1590-2020.txt');
-
-if ~exist(fileparts(aacgm_path),'dir')
-    error([ErrorStr,...
-        'No aacgm coefficients found at %s\n'], aacgm_path)
-end
-if ~exist(igrf_path, 'file')
-    error([ErrorStr,...
-        'No igrf coefficients found at %s\n'], igrf_path)
-end
 
 if ~exist(fullfile(RootDir,'mex_aacgm'),'file')
-    
-    mex(['-I',ModelDir],'-output',fullfile(RootDir,'mex_aacgm'), ...
+    %COMPFLAGS='$COMPFLAGS -D__USE_MINGW_ANSI_STDIO'
+    mex('-v',...
+        ['-I',ModelDir],...
+        '-output',fullfile(RootDir,'mex_aacgm'), ...
         fullfile(ModelDir,'aacgmlib_v2.c'), ...
         fullfile(ModelDir,'mlt_v2.c'), ...
         fullfile(ModelDir,'igrflib.c'), ...
         fullfile(ModelDir,'rtime.c'), ...
-        fullfile(ModelDir,'genmag.c'), ...
         fullfile(ModelDir,'astalglib.c'), ...
-        fullfile(RootDir,'mex_aacgm.c'))
+        fullfile(RootDir,'mex_aacgm.c'));
+     
 end
 
 code = 0; % default is G2A
@@ -162,13 +158,50 @@ elseif strcmpi(mode,'map')
     [lat,lon,alt,time] = ndgrid(lat(:),lon(:), alt(:), time(:));
 end
 
-[d, Out.mlt] = mex_aacgm(aacgm_path,igrf_path, ...
-    [lat(:),lon(:),alt(:)]', ...
+[d, Out.mlt] = mex_aacgm(char(aacgm_dirs(1)), char(aacgm_dirs(2)), ...
+    double([lat(:),lon(:),alt(:)])', ...
     datevec(time)',double(code));
 
-Out.mlat = OutFmt(d(1,:));
-Out.mlon = OutFmt(d(2,:));
-Out.malt = OutFmt(d(3,:));
-Out.mlt = OutFmt(Out.mlt);
+if bitand(code,1)
+    Out.mlat = Out.lat;
+    Out.mlon = Out.lon;
+    Out.malt = Out.alt;
+    Out.lat = OutFmt(d(1,:))';
+    Out.lon = OutFmt(d(2,:))';
+    Out.alt = OutFmt(d(3,:))';
+else
+    Out.mlat = OutFmt(d(1,:))';
+    Out.mlon = OutFmt(d(2,:))';
+    Out.malt = OutFmt(d(3,:))';
+end
+
+Out.mlt = OutFmt(Out.mlt)';
+
+end
+
+function vars = init(coefs_dir)
+    
+    %get the list of files
+    f = dir(coefs_dir);
+
+    %get the desired files
+    names = arrayfun(@(x) string(f(x).name),1:length(f),'un',1);
+    ind(1) = find(contains(names,"aacgm_coeffs-"),1,'first');
+    ind(2) = find(contains(names,"igrf"),1,'first');
+
+    %check that the files were found
+    if isempty(ind(1)); warning("AACGM Coefficients files not found."); end
+    if isempty(ind(2)); warning("IGRF Coefficients files not found."); end
+
+    %split the prefix from the full file name
+    t = strsplit(names(ind(1)),'-');
+    t(3) = "";
+    prefix = strjoin(t,'-');
+
+    %set the env vars
+    vars(1) = fullfile(coefs_dir,prefix);
+    vars(2) = fullfile(coefs_dir,names(ind(2)));
+    setenv("AACGM_v2_DAT_PREFIX",vars(1));
+    setenv("IGRF_COEFFS",vars(2));
 
 end
