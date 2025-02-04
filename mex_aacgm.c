@@ -249,7 +249,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             err = AACGM_v2_SetDateTime(yr, mo, dy, hr, mt, sc);
             *(err_out + i*2) = err;
 
-            if (err != ) {
+            if (err != 0) {
                 mexWarnMsgIdAndTxt("AACGM_v2_SetDateTime:Error",
                     "There was an error in AACGM_v2_SetDateTime, see the return codes matrix.");
             }
